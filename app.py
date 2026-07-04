@@ -2,76 +2,61 @@ import streamlit as st
 import pandas as pd
 import os
 
-# --- AYARLAR ---
 EXCEL_FILE = 'stok.xlsx'
 
-# --- GİRİŞ KONTROLÜ ---
-if 'logged_in' not in st.session_state:
-    st.session_state['logged_in'] = False
+# Giriş Kontrolü
+if 'logged_in' not in st.session_state: st.session_state['logged_in'] = False
 
 if not st.session_state['logged_in']:
-    st.title("☕ Espresso Stok Paneli")
+    st.title("🔐 Giriş Paneli")
     user = st.text_input("Kullanıcı Adı")
     pw = st.text_input("Şifre", type="password")
     if st.button("Giriş Yap"):
         if user == "admin" and pw == "kahve123":
             st.session_state['logged_in'] = True
             st.rerun()
-        else:
-            st.error("Hatalı giriş!")
     st.stop()
 
-# --- ANA UYGULAMA ---
-st.title("📊 Stok Yönetim Merkezi")
-if st.sidebar.button("Çıkış Yap"):
-    st.session_state['logged_in'] = False
-    st.rerun()
-
-# Dosyayı Yükle
-if not os.path.exists(EXCEL_FILE):
-    df = pd.DataFrame(columns=['Ürün Adı', 'Stok Adedi', 'Birim Fiyat'])
-    df.to_excel(EXCEL_FILE, index=False)
-else:
+# Dosya İşlemleri
+if os.path.exists(EXCEL_FILE):
     df = pd.read_excel(EXCEL_FILE)
+else:
+    st.error("stok.xlsx dosyası bulunamadı!")
+    st.stop()
 
-# --- İŞLEMLER ---
-tab1, tab2, tab3 = st.tabs(["Stok Listesi", "Yeni Ürün Ekle", "Ürün Düzenle/Sil"])
+st.title("📊 Stok Yönetim")
+tab1, tab2, tab3 = st.tabs(["Listele", "Ekle", "Düzenle/Sil"])
 
 with tab1:
     st.dataframe(df, use_container_width=True)
 
 with tab2:
-    with st.form("ekle_formu"):
-        yeni_ad = st.text_input("Ürün Adı")
-        yeni_adet = st.number_input("Adet", min_value=0)
-        yeni_fiyat = st.number_input("Fiyat", min_value=0.0)
+    with st.form("ekle"):
+        # Excel'indeki sütun isimlerini buraya birebir yazdım
+        cesit = st.text_input("Kahve Çeşidi")
+        adet = st.number_input("Stok Adedi", min_value=0)
         if st.form_submit_button("Ekle"):
-            yeni_satir = pd.DataFrame({'Ürün Adı': [yeni_ad], 'Stok Adedi': [yeni_adet], 'Birim Fiyat': [yeni_fiyat]})
-            df = pd.concat([df, yeni_satir], ignore_index=True)
+            yeni = pd.DataFrame({'kahve_cesidi': [cesit], 'stok_adedi': [adet]})
+            df = pd.concat([df, yeni], ignore_index=True)
             df.to_excel(EXCEL_FILE, index=False)
-            st.success("Ürün eklendi!")
+            st.success("Eklendi!")
             st.rerun()
 
 with tab3:
-    secili_urun = st.selectbox("İşlem yapılacak ürünü seçin:", df['Ürün Adı'].unique())
-    
-    # Mevcut veriyi getir
-    urun_data = df[df['Ürün Adı'] == secili_urun].iloc[0]
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        yeni_adet = st.number_input("Yeni Adet", value=int(urun_data['Stok Adedi']))
-        yeni_fiyat = st.number_input("Yeni Fiyat", value=float(urun_data['Birim Fiyat']))
-    
-    if st.button("Güncelle"):
-        df.loc[df['Ürün Adı'] == secili_urun, 'Stok Adedi'] = yeni_adet
-        df.loc[df['Ürün Adı'] == secili_urun, 'Birim Fiyat'] = yeni_fiyat
-        df.to_excel(EXCEL_FILE, index=False)
-        st.success("Güncellendi!")
-        st.rerun()
+    if not df.empty:
+        # Excel'deki sütun isimlerine göre seçim yaptırıyoruz
+        secilen = st.selectbox("Düzenlenecek Kahveyi Seç:", df['kahve_cesidi'].unique())
         
-    if st.button("❌ Ürünü Sil"):
-        df = df[df['Ürün Adı'] != secili_urun]
-        df.to_excel(EXCEL_FILE, index=False)
-        st.warning("Ürün silindi!")
-        st.rerun()
+        # Seçili ürünün mevcut adedini çek
+        mevcut_adet = int(df[df['kahve_cesidi'] == secilen]['stok_adedi'].iloc[0])
+        yeni_adet = st.number_input("Yeni Adet", value=mevcut_adet)
+        
+        if st.button("Güncelle"):
+            df.loc[df['kahve_cesidi'] == secilen, 'stok_adedi'] = yeni_adet
+            df.to_excel(EXCEL_FILE, index=False)
+            st.rerun()
+            
+        if st.button("❌ Sil"):
+            df = df[df['kahve_cesidi'] != secilen]
+            df.to_excel(EXCEL_FILE, index=False)
+            st.rerun()
